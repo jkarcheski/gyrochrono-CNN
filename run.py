@@ -38,66 +38,83 @@ def save_state(epoch, model, opt, loss):
     }, "checkpoint.pth")
 
 
-def train(model, num_epochs, train_loader, val_loader):
+def train(model, num_epochs, train_loader, val_loader, lr=1e-6):
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
     model.train()
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-6)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     model.to(device)
     criterion.to(device)
 
     # Print the model architecture
     # print(model)
+
+    train_losses = []
+    val_losses = []
     
     # training loop:
     for epoch in range(num_epochs):
+        running_loss = 0.0
         for inputs, labels in train_loader:
             inputs = inputs.to(device).float()
             labels = labels.to(device).float() 
-        
-            # important! must always zero out the gradients before the next forward pass
+            
             optimizer.zero_grad()
-
-            # forward propagation
             outputs = model(inputs).squeeze() 
-
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
+            running_loss += loss.item() * inputs.size(0)  # sum weighted by batch size
+
+        train_loss = running_loss / len(train_loader.dataset)
+        train_losses.append(train_loss)
+
+        val_loss = validation_loss(model, val_loader, criterion, device)
+        val_losses.append(val_loss)
+
         if epoch%100==0:
-            print("epoch:", epoch)
-            eval(model, val_loader)
-            print("Loss: ", loss.item())
+            print(f"Epoch {epoch}, Training Loss: {train_loss:.4f}. Validation Loss: {val_loss:.4f}")
+            # eval(model, val_loader)
             save_state(epoch, model, optimizer, loss)
         
         model.train()
 
-def eval(model, val_loader):
-    device = torch.device("cpu")
+    return train_losses, val_losses
+
+def validation_loss(model, val_loader, criterion, device):
     model.eval()
-
-    total_loss = 0.0
-    criterion = nn.MSELoss()
-
+    running_loss = 0.0
     with torch.no_grad():
         for inputs, labels in val_loader:
             inputs = inputs.to(device).float()
             labels = labels.to(device).float()
-
+            
             outputs = model(inputs).squeeze()
             loss = criterion(outputs, labels)
-            total_loss += loss.item() * inputs.size(0)
+            running_loss += loss.item() * inputs.size(0)
 
-    avg_loss = total_loss / len(val_loader.dataset)
-    print(f'Validation MSE: {avg_loss:.6f}')
+    avg_loss = running_loss / len(val_loader.dataset)
+    return avg_loss
 
+def plot_losses(train, val, epochs):
+    fig, ax = plt.subplots()
+
+    ax.set_title("Loss over time")
+    ax.set_xlabel("Epoch")
+
+    ax.plot(range(epochs), train, label='training  loss')
+    ax.plot(range(epochs), val, label='validation loss')
+
+    ax.legend()
+    
+    plt.show()
 
 def main():
-    num_epochs = 10000
+    num_epochs = 5000
 
     print("loading in data")
 
@@ -118,27 +135,12 @@ def main():
     # Create an instance of the model
     model = net.StellarClusterCNN()
 
-
     print("starting training")
-    train(model, num_epochs, train_loader, val_loader)
+    train_losses, validation_losses = train(model, num_epochs, train_loader, val_loader, lr=1e-5)
+    plot_losses(train_losses, validation_losses, num_epochs)
 
     print("training complete. \nstarting post-training evaluation.")
     eval(model, test_loader)
-
-    # #loading in a checkpoint
-    # checkpoint = torch.load("checkpoint.pth")
-    # model = net.StellarClusterCNN()
-    # model.load_state_dict(checkpoint["model_state_dict"])
-
-    # optimizer = optim.Adam(model.parameters(), lr=1e-6)   # TODO: change lr
-    # optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    # start_epoch = checkpoint["epoch"]
-    # loss_at_save = checkpoint["loss"]
-
-    # model.train()  # Switch back to training mode 
-
-    # train(model, num_epochs, train_loader, val_loader)
-
     
 if __name__ == "__main__":
     main()
