@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import matplotlib.pyplot as plt
 import torch
 from numpy import random
@@ -113,8 +114,9 @@ def plot_losses(train, val, epochs):
     
     plt.show()
 
-def main():
-    num_epochs = 5000
+def main(args):
+    # num_epochs = 5000
+    num_epochs = args.epochs
 
     print("loading in data")
 
@@ -136,11 +138,18 @@ def main():
     model = net.StellarClusterCNN()
 
     print("starting training")
-    train_losses, validation_losses = train(model, num_epochs, train_loader, val_loader, lr=1e-5)
+    train_losses, validation_losses = train(model, num_epochs, train_loader, val_loader, lr=args.learning_rate)
     plot_losses(train_losses, validation_losses, num_epochs)
 
     print("training complete. \nstarting post-training evaluation.")
-    eval(model, test_loader)
+    validation_loss(model, test_loader, nn.MSELoss(), torch.device("cpu"))
     
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='')
+    # parser.add_argument('--folder', default='', type=str, metavar='FOLDER')
+    parser.add_argument('--noise_level', default='', type=str, metavar='DEVICE')
+    parser.add_argument('--epochs', '--e', default=1000, type=int, metavar='EPOCHS')
+    parser.add_argument('--learning_rate', '--lr', default=1e-5, type=float, metavar='STEPSIZE')
+    parser.add_argument('--device', default='cpu', type=str, metavar='DEVICE')
+    args = parser.parse_args()
+    main(args)
